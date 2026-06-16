@@ -1,0 +1,172 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  BUYER
+  SUPPLIER
+}
+
+enum Status {
+  PENDING
+  PARTIALLY_DISPATCHED
+  FULLY_DISPATCHED
+  IN_TRANSIT
+  DELAYED
+  PENDING_DELAYED
+}
+
+enum DocumentType {
+  INVOICE
+  LR_COPY
+  PACKING_LIST
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(BUYER)
+  supplierId   String?
+  buyerId      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+  buyer        Buyer?    @relation(fields: [buyerId], references: [id])
+}
+
+model Supplier {
+  id             String   @id @default(uuid())
+  supplierCode   String   @unique
+  supplierName   String
+  supplierEmail  String
+  contactPerson  String?
+  phone          String?
+  address        String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users          User[]
+  scheduleLines  ScheduleLine[]
+  emailLogs      EmailLog[]
+}
+
+model Buyer {
+  id             String   @id @default(uuid())
+  buyerName      String
+  buyerEmail     String
+  unit           String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users          User[]
+  scheduleLines  ScheduleLine[]
+}
+
+model ScheduleLine {
+  id               String   @id @default(uuid())
+  supplierId       String?
+  buyerId          String?
+  supplierCode     String
+  supplierName     String
+  buyerName        String
+  unit             String?
+  poNo             String
+  poDate           DateTime?
+  itemCode         String
+  itemName         String
+  scheduleQty      Float
+  requiredDate     DateTime
+  totalDispatchQty Float    @default(0)
+  balanceQty       Float    @default(0)
+  status           Status   @default(PENDING)
+  remarks          String?
+  uploadBatchId    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  supplier         Supplier?    @relation(fields: [supplierId], references: [id])
+  buyer            Buyer?       @relation(fields: [buyerId], references: [id])
+  uploadBatch      UploadBatch? @relation(fields: [uploadBatchId], references: [id])
+  shipments        Shipment[]
+  emailLogs        EmailLog[]
+}
+
+model Shipment {
+  id                   String   @id @default(uuid())
+  scheduleLineId       String
+  dispatchQty          Float
+  dispatchDate         DateTime
+  expectedDeliveryDate DateTime?
+  invoiceNo            String?
+  invoiceDate          DateTime?
+  lrNo                 String?
+  lrDate               DateTime?
+  transporterName      String?
+  vehicleNo            String?
+  numberOfBoxes        Int?
+  packingDetails       String?
+  shipmentRemarks      String?
+  createdBy            String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  scheduleLine         ScheduleLine @relation(fields: [scheduleLineId], references: [id], onDelete: Cascade)
+  documents            ShipmentDocument[]
+}
+
+model ShipmentDocument {
+  id               String   @id @default(uuid())
+  shipmentId       String
+  documentType     DocumentType
+  originalFileName String
+  storedFileName   String
+  filePath         String
+  mimeType         String
+  fileSize         Int
+  uploadedAt       DateTime @default(now())
+
+  shipment         Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
+model UploadBatch {
+  id               String   @id @default(uuid())
+  uploadedBy       String?
+  fileName         String
+  totalRows        Int      @default(0)
+  successRows      Int      @default(0)
+  failedRows       Int      @default(0)
+  uploadDate       DateTime @default(now())
+  remarks          String?
+
+  scheduleLines    ScheduleLine[]
+}
+
+model EmailLog {
+  id               String   @id @default(uuid())
+  sentBy           String?
+  supplierId       String?
+  scheduleLineId   String?
+  toEmail          String
+  subject          String
+  body             String
+  sentAt           DateTime @default(now())
+  status           String   @default("SENT") // e.g., SENT, FAILED
+
+  supplier         Supplier?     @relation(fields: [supplierId], references: [id])
+  scheduleLine     ScheduleLine? @relation(fields: [scheduleLineId], references: [id])
+}
