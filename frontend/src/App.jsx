@@ -7,11 +7,14 @@ import Dashboard from './pages/Dashboard';
 import UploadSchedule from './pages/UploadSchedule';
 import ShipmentTracking from './pages/ShipmentTracking';
 import Reports from './pages/Reports';
+import ReminderMail from './pages/ReminderMail';
 import ManageUsers from './pages/ManageUsers';
 import ManageSuppliers from './pages/ManageSuppliers';
 import UploadHistory from './pages/UploadHistory';
 import SupplierSchedule from './pages/SupplierSchedule';
 import ShipmentHistory from './pages/ShipmentHistory';
+import Profile from './pages/Profile';
+import NotFound from './pages/NotFound';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -34,6 +37,7 @@ function AppRoutes() {
         <Route path="users" element={<ManageUsers />} />
         <Route path="suppliers" element={<ManageSuppliers />} />
         <Route path="upload-history" element={<UploadHistory />} />
+        <Route path="profile" element={<Profile />} />
       </Route>
 
       {/* Buyer Routes */}
@@ -44,7 +48,8 @@ function AppRoutes() {
         <Route path="pending" element={<ShipmentTracking filterStatus="PENDING" />} />
         <Route path="delayed" element={<ShipmentTracking filterStatus="DELAYED" />} />
         <Route path="reports" element={<Reports />} />
-        <Route path="reminder" element={<ShipmentTracking />} />
+        <Route path="reminder" element={<ReminderMail />} />
+        <Route path="profile" element={<Profile />} />
       </Route>
 
       {/* Supplier Routes */}
@@ -53,6 +58,7 @@ function AppRoutes() {
         <Route path="schedule" element={<SupplierSchedule />} />
         <Route path="update-shipment" element={<SupplierSchedule />} />
         <Route path="history" element={<ShipmentHistory />} />
+        <Route path="profile" element={<Profile />} />
       </Route>
 
       {/* Default redirect */}
@@ -63,7 +69,7 @@ function AppRoutes() {
           <Navigate to="/supplier/dashboard" />
         ) : <Navigate to="/login" />
       } />
-      <Route path="*" element={<Navigate to="/login" />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
