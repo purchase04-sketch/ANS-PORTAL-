@@ -6,7 +6,7 @@ import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import UploadSchedule from './pages/UploadSchedule';
 import ShipmentTracking from './pages/ShipmentTracking';
-import ReportViewer from './pages/ReportViewer';
+import Reports from './pages/Reports';
 import ReminderMail from './pages/ReminderMail';
 import CreateASN from './pages/CreateASN';
 import ASNList from './pages/ASNList';
@@ -62,7 +62,7 @@ function AppRoutes() {
         <Route path="tracking" element={<ShipmentTracking />} />
         <Route path="pending" element={<ShipmentTracking filterStatus="PENDING" />} />
         <Route path="delayed" element={<ShipmentTracking filterStatus="DELAYED" />} />
-        <Route path="reports" element={<ReportViewer />} />
+        <Route path="reports" element={<Reports />} />
         <Route path="reminder" element={<ReminderMail />} />
         <Route path="profile" element={<Profile />} />
         <Route path="asn" element={<ASNList />} />
