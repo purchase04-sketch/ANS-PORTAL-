@@ -84,4 +84,37 @@ export const supplierAPI = {
   getAll: () => api.get('/suppliers'),
 };
 
+// ASN APIs
+export const asnAPI = {
+  createDraft: (data) => api.post('/asn/draft', data),
+  submitASN: (data) => api.post('/asn/submit', data),
+  getAll: (params) => api.get('/asn', { params }),
+  getById: (id) => api.get(`/asn/${id}`),
+  update: (id, data) => api.put(`/asn/${id}`, data),
+  cancel: (id) => api.post(`/asn/${id}/cancel`),
+  uploadDocument: (id, formData) => api.post(`/asn/${id}/upload-documents`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getQRCode: (id) => api.get(`/asn/${id}/qr`),
+  saveCNDN: (id, data) => api.post(`/asn/${id}/cndn`, data),
+  getCNDN: (id) => api.get(`/asn/cndn/${id}`)
+};
+
+// Gate APIs
+export const gateAPI = {
+  getTodayExpected: () => api.get('/gate/today-expected'),
+  searchASN: (query) => api.get('/gate/search', { params: { query } }),
+  scanQR: (qrToken) => api.post('/gate/scan-qr', { qrToken }),
+  markGateIn: (asnId, data) => api.post(`/gate/${asnId}/mark-gate-in`, data),
+  holdVehicle: (gateEntryId, data) => api.post(`/gate/${gateEntryId}/hold`, data),
+  releaseHold: (gateEntryId) => api.post(`/gate/${gateEntryId}/release-hold`)
+};
+
+// ERP APIs
+export const erpAPI = {
+  getConfig: () => api.get('/erp/config'),
+  saveConfig: (data) => api.post('/erp/config', data),
+  syncGateEntry: (gateEntryId) => api.post(`/erp/gate-entry/${gateEntryId}/sync`),
+  retryGateEntry: (gateEntryId) => api.post(`/erp/gate-entry/${gateEntryId}/retry`),
+  getLogs: () => api.get('/erp/logs')
+};
+
 export default api;

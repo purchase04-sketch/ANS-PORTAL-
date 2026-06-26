@@ -2,31 +2,41 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
   LayoutDashboard, Upload, Truck, AlertTriangle, FileText, Mail,
-  Users, Building2, History, Package, ClipboardList, LogOut, Menu, X, Settings
+  Users, Building2, History, Package, ClipboardList, LogOut, Menu, X, Settings, QrCode, Server, Database
 } from 'lucide-react';
 import { useState } from 'react';
 
 const adminNav = [
   { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/admin/asn', icon: Package, label: 'All ASNs' },
+  { to: '/admin/gate', icon: Truck, label: 'Gate Dashboard' },
+  { to: '/admin/gate-scan', icon: QrCode, label: 'Scan Gate Pass' },
+  { to: '/admin/erp-config', icon: Server, label: 'ERP Config' },
+  { to: '/admin/erp-logs', icon: Database, label: 'ERP Sync Logs' },
   { to: '/admin/users', icon: Users, label: 'Manage Users' },
   { to: '/admin/suppliers', icon: Building2, label: 'Manage Suppliers' },
   { to: '/admin/upload-history', icon: History, label: 'Upload History' },
+
 ];
 
 const buyerNav = [
   { to: '/buyer/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/buyer/asn', icon: Package, label: 'All ASNs' },
+  { to: '/buyer/gate', icon: Truck, label: 'Gate Dashboard' },
+  { to: '/buyer/gate-scan', icon: QrCode, label: 'Scan Gate Pass' },
   { to: '/buyer/upload', icon: Upload, label: 'Upload Schedule' },
   { to: '/buyer/tracking', icon: Truck, label: 'Shipment Tracking' },
   { to: '/buyer/pending', icon: AlertTriangle, label: 'Pending Shipments' },
   { to: '/buyer/delayed', icon: AlertTriangle, label: 'Delayed Shipments' },
   { to: '/buyer/reports', icon: FileText, label: 'Reports' },
   { to: '/buyer/reminder', icon: Mail, label: 'Reminder Mail' },
+
 ];
 
 const supplierNav = [
   { to: '/supplier/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/supplier/schedule', icon: ClipboardList, label: 'My PO Schedule' },
-  { to: '/supplier/update-shipment', icon: Package, label: 'Update Shipment' },
+  { to: '/supplier/asn', icon: Package, label: 'My ASNs' },
   { to: '/supplier/history', icon: History, label: 'Shipment History' },
 ];
 

@@ -1,6 +1,8 @@
 const xlsx = require('xlsx');
 const prisma = require('../utils/prisma');
 const fs = require('fs');
+const { parseDate } = require('../utils/helpers');
+const { createAuditLog } = require('../utils/auditLogger');
 
 exports.uploadExcel = async (req, res) => {
     try {
@@ -8,15 +10,41 @@ exports.uploadExcel = async (req, res) => {
             return res.status(400).json({ message: 'No file uploaded' });
         }
 
-        const workbook = xlsx.readFile(req.file.path);
+        let workbook;
+        try {
+            workbook = xlsx.readFile(req.file.path);
+        } catch (parseErr) {
+            try { fs.unlinkSync(req.file.path); } catch (e) {}
+            return res.status(400).json({ message: 'Cannot read Excel file. Ensure it is a valid .xls or .xlsx file.' });
+        }
+
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const data = xlsx.utils.sheet_to_json(worksheet);
+        const data = xlsx.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (!data || data.length === 0) {
-            // Clean up temp file
-            fs.unlinkSync(req.file.path);
-            return res.status(400).json({ message: 'Empty Excel file' });
+            try { fs.unlinkSync(req.file.path); } catch (e) {}
+            return res.status(400).json({ message: 'Excel file has no data rows' });
+        }
+
+        // Validate headers
+        const requiredHeaders = ['Supplier Code', 'Supplier Name', 'PO No.', 'Item Code', 'Schedule Qty', 'Required Date'];
+        const headers = Object.keys(data[0]);
+        // Also accept 'PO No' without dot
+        const normalizedHeaders = headers.map(h => h.trim());
+        const hasPONo = normalizedHeaders.includes('PO No.') || normalizedHeaders.includes('PO No');
+
+        const missingHeaders = requiredHeaders.filter(rh => {
+            if (rh === 'PO No.') return !hasPONo;
+            return !normalizedHeaders.includes(rh);
+        });
+
+        if (missingHeaders.length > 0) {
+            try { fs.unlinkSync(req.file.path); } catch (e) {}
+            return res.status(400).json({
+                message: `Missing required columns: ${missingHeaders.join(', ')}`,
+                expectedColumns: ['Supplier Code', 'Supplier Name', 'Supplier Email', 'Buyer Name', 'Unit / Plant', 'PO No.', 'PO Date', 'Item Code', 'Item Name', 'Schedule Qty', 'Required Date', 'Remarks']
+            });
         }
 
         let successRows = 0;
@@ -26,7 +54,7 @@ exports.uploadExcel = async (req, res) => {
         // Create upload batch record
         const uploadBatch = await prisma.uploadBatch.create({
             data: {
-                fileName: req.file.originalname,
+                fileName: req.file.originalname || req.file.filename,
                 uploadedBy: req.user.email,
                 totalRows: data.length
             }
@@ -38,22 +66,24 @@ exports.uploadExcel = async (req, res) => {
             try {
                 // Validation
                 const rowErrors = [];
-                if (!row['Supplier Code']) rowErrors.push('Supplier Code is required');
-                if (!row['Supplier Name']) rowErrors.push('Supplier Name is required');
-                if (!row['PO No.'] && !row['PO No']) rowErrors.push('PO No. is required');
-                if (!row['Item Code']) rowErrors.push('Item Code is required');
+                const supplierCode = String(row['Supplier Code'] || '').trim();
+                const supplierName = String(row['Supplier Name'] || '').trim();
+                const poNoRaw = row['PO No.'] || row['PO No'] || '';
+                const poNo = String(poNoRaw).trim();
+                const itemCode = String(row['Item Code'] || '').trim();
+                const scheduleQtyRaw = row['Schedule Qty'];
+                const requiredDateRaw = row['Required Date'];
 
-                const scheduleQty = Number(row['Schedule Qty']);
+                if (!supplierCode) rowErrors.push('Supplier Code is required');
+                if (!supplierName) rowErrors.push('Supplier Name is required');
+                if (!poNo) rowErrors.push('PO No. is required');
+                if (!itemCode) rowErrors.push('Item Code is required');
+
+                const scheduleQty = Number(scheduleQtyRaw);
                 if (isNaN(scheduleQty) || scheduleQty <= 0) rowErrors.push('Schedule Qty must be a positive number');
 
-                const requiredDateRaw = row['Required Date'];
-                let requiredDate;
-                if (requiredDateRaw) {
-                    requiredDate = new Date(requiredDateRaw);
-                    if (isNaN(requiredDate.getTime())) rowErrors.push('Required Date is invalid');
-                } else {
-                    rowErrors.push('Required Date is required');
-                }
+                const requiredDate = parseDate(requiredDateRaw);
+                if (!requiredDate) rowErrors.push('Required Date is required or invalid format (use DD-MM-YYYY, DD/MM/YYYY, or YYYY-MM-DD)');
 
                 if (rowErrors.length > 0) {
                     errors.push({ row: rowNum, errors: rowErrors });
@@ -61,8 +91,8 @@ exports.uploadExcel = async (req, res) => {
                     continue;
                 }
 
-                const poNo = String(row['PO No.'] || row['PO No']);
-                const itemCode = String(row['Item Code']);
+                // Parse optional dates
+                const poDate = parseDate(row['PO Date']);
 
                 // Check duplicates within the database
                 const existing = await prisma.scheduleLine.findFirst({
@@ -80,7 +110,7 @@ exports.uploadExcel = async (req, res) => {
                         data: {
                             scheduleQty,
                             balanceQty: scheduleQty - existing.totalDispatchQty,
-                            supplierName: String(row['Supplier Name']),
+                            supplierName,
                             buyerName: String(row['Buyer Name'] || ''),
                             unit: String(row['Unit / Plant'] || row['Unit'] || ''),
                             itemName: String(row['Item Name'] || ''),
@@ -91,18 +121,17 @@ exports.uploadExcel = async (req, res) => {
                     continue;
                 }
 
-                // Find supplier mapping
+                // Find or auto-create supplier
                 let supplier = await prisma.supplier.findUnique({
-                    where: { supplierCode: String(row['Supplier Code']) }
+                    where: { supplierCode }
                 });
 
-                // Auto-create supplier if not found
                 if (!supplier) {
                     supplier = await prisma.supplier.create({
                         data: {
-                            supplierCode: String(row['Supplier Code']),
-                            supplierName: String(row['Supplier Name']),
-                            supplierEmail: String(row['Supplier Email'] || `${String(row['Supplier Code']).toLowerCase()}@supplier.com`)
+                            supplierCode,
+                            supplierName,
+                            supplierEmail: String(row['Supplier Email'] || `${supplierCode.toLowerCase()}@supplier.com`)
                         }
                     });
                 }
@@ -118,12 +147,12 @@ exports.uploadExcel = async (req, res) => {
                     data: {
                         supplierId: supplier.id,
                         buyerId: buyer ? buyer.id : null,
-                        supplierCode: String(row['Supplier Code']),
-                        supplierName: String(row['Supplier Name']),
+                        supplierCode,
+                        supplierName,
                         buyerName,
                         unit: String(row['Unit / Plant'] || row['Unit'] || ''),
                         poNo,
-                        poDate: row['PO Date'] ? new Date(row['PO Date']) : new Date(),
+                        poDate: poDate || null,
                         itemCode,
                         itemName: String(row['Item Name'] || ''),
                         scheduleQty,
@@ -144,11 +173,25 @@ exports.uploadExcel = async (req, res) => {
 
         await prisma.uploadBatch.update({
             where: { id: uploadBatch.id },
-            data: { successRows, failedRows }
+            data: {
+                successRows,
+                failedRows,
+                uploadErrors: errors.length > 0 ? JSON.stringify(errors) : null
+            }
         });
 
         // Clean up temp file
         try { fs.unlinkSync(req.file.path); } catch (e) {}
+
+        // Audit log
+        await createAuditLog({
+            userId: req.user.id,
+            action: 'UPLOAD',
+            module: 'SCHEDULE',
+            recordId: uploadBatch.id,
+            newValue: { total: data.length, success: successRows, failed: failedRows },
+            ipAddress: req.ip
+        });
 
         res.json({
             message: 'Upload complete',
@@ -174,17 +217,17 @@ exports.getSchedules = async (req, res) => {
             }
         }
 
-        // Apply filters from query params
-        const { status, supplierCode, poNo, itemCode, search } = req.query;
+        // Apply filters from query params (SQLite compatible — no mode: 'insensitive')
+        const { status, supplierCode, poNo, itemCode } = req.query;
         if (status) where.status = status;
         if (supplierCode) where.supplierCode = supplierCode;
-        if (poNo) where.poNo = { contains: poNo, mode: 'insensitive' };
-        if (itemCode) where.itemCode = { contains: itemCode, mode: 'insensitive' };
+        if (poNo) where.poNo = { contains: poNo };
+        if (itemCode) where.itemCode = { contains: itemCode };
 
         const schedules = await prisma.scheduleLine.findMany({
             where,
             orderBy: { requiredDate: 'asc' },
-            include: { shipments: { include: { documents: true } } }
+            include: { shipments: { include: { documents: true } }, asnLines: true }
         });
         res.json(schedules);
     } catch (error) {
@@ -197,7 +240,7 @@ exports.getScheduleById = async (req, res) => {
     try {
         const schedule = await prisma.scheduleLine.findUnique({
             where: { id: req.params.id },
-            include: { shipments: { include: { documents: true } } }
+            include: { shipments: { include: { documents: true } }, asnLines: true }
         });
         if (!schedule) return res.status(404).json({ message: 'Not found' });
         res.json(schedule);
@@ -210,6 +253,30 @@ exports.getBatches = async (req, res) => {
     try {
         const batches = await prisma.uploadBatch.findMany({ orderBy: { uploadDate: 'desc' } });
         res.json(batches);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+exports.getBatchErrors = async (req, res) => {
+    try {
+        const batch = await prisma.uploadBatch.findUnique({ where: { id: req.params.id } });
+        if (!batch) return res.status(404).json({ message: 'Batch not found' });
+
+        let errors = [];
+        if (batch.uploadErrors) {
+            try { errors = JSON.parse(batch.uploadErrors); } catch (e) {}
+        }
+
+        res.json({
+            batchId: batch.id,
+            fileName: batch.fileName,
+            totalRows: batch.totalRows,
+            successRows: batch.successRows,
+            failedRows: batch.failedRows,
+            uploadDate: batch.uploadDate,
+            errors
+        });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }

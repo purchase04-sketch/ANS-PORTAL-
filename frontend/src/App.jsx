@@ -6,8 +6,16 @@ import DashboardLayout from './layouts/DashboardLayout';
 import Dashboard from './pages/Dashboard';
 import UploadSchedule from './pages/UploadSchedule';
 import ShipmentTracking from './pages/ShipmentTracking';
-import Reports from './pages/Reports';
+import ReportViewer from './pages/ReportViewer';
 import ReminderMail from './pages/ReminderMail';
+import CreateASN from './pages/CreateASN';
+import ASNList from './pages/ASNList';
+import ASNDetail from './pages/ASNDetail';
+import GateDashboard from './pages/GateDashboard';
+import QRScanner from './pages/QRScanner';
+import GateEntry from './pages/GateEntry';
+import ERPConfig from './pages/ERPConfig';
+import ERPLogs from './pages/ERPLogs';
 import ManageUsers from './pages/ManageUsers';
 import ManageSuppliers from './pages/ManageSuppliers';
 import UploadHistory from './pages/UploadHistory';
@@ -38,6 +46,13 @@ function AppRoutes() {
         <Route path="suppliers" element={<ManageSuppliers />} />
         <Route path="upload-history" element={<UploadHistory />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="asn" element={<ASNList />} />
+        <Route path="asn/:id" element={<ASNDetail />} />
+        <Route path="gate" element={<GateDashboard />} />
+        <Route path="gate-scan" element={<QRScanner />} />
+        <Route path="gate-entry/:asnId" element={<GateEntry />} />
+        <Route path="erp-config" element={<ERPConfig />} />
+        <Route path="erp-logs" element={<ERPLogs />} />
       </Route>
 
       {/* Buyer Routes */}
@@ -47,9 +62,14 @@ function AppRoutes() {
         <Route path="tracking" element={<ShipmentTracking />} />
         <Route path="pending" element={<ShipmentTracking filterStatus="PENDING" />} />
         <Route path="delayed" element={<ShipmentTracking filterStatus="DELAYED" />} />
-        <Route path="reports" element={<Reports />} />
+        <Route path="reports" element={<ReportViewer />} />
         <Route path="reminder" element={<ReminderMail />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="asn" element={<ASNList />} />
+        <Route path="asn/:id" element={<ASNDetail />} />
+        <Route path="gate" element={<GateDashboard />} />
+        <Route path="gate-scan" element={<QRScanner />} />
+        <Route path="gate-entry/:asnId" element={<GateEntry />} />
       </Route>
 
       {/* Supplier Routes */}
@@ -59,6 +79,9 @@ function AppRoutes() {
         <Route path="update-shipment" element={<SupplierSchedule />} />
         <Route path="history" element={<ShipmentHistory />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="asn" element={<ASNList />} />
+        <Route path="asn/create" element={<CreateASN />} />
+        <Route path="asn/:id" element={<ASNDetail />} />
       </Route>
 
       {/* Default redirect */}

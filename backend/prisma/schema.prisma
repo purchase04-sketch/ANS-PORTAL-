@@ -12,7 +12,7 @@ model User {
   name         String
   email        String   @unique
   passwordHash String
-  role         String   @default("BUYER")
+  role         String   @default("BUYER") // ADMIN, BUYER, SUPPLIER, GATE
   supplierId   String?
   buyerId      String?
   isActive     Boolean  @default(true)
@@ -21,6 +21,7 @@ model User {
 
   supplier     Supplier? @relation(fields: [supplierId], references: [id])
   buyer        Buyer?    @relation(fields: [buyerId], references: [id])
+  gateEntries  GateEntry[]
 }
 
 model Supplier {
@@ -38,6 +39,7 @@ model Supplier {
   users          User[]
   scheduleLines  ScheduleLine[]
   emailLogs      EmailLog[]
+  asns           ASN[]
 }
 
 model Buyer {
@@ -80,6 +82,7 @@ model ScheduleLine {
   uploadBatch      UploadBatch? @relation(fields: [uploadBatchId], references: [id])
   shipments        Shipment[]
   emailLogs        EmailLog[]
+  asnLines         ASNLine[]
 }
 
 model Shipment {
@@ -126,6 +129,7 @@ model UploadBatch {
   totalRows        Int      @default(0)
   successRows      Int      @default(0)
   failedRows       Int      @default(0)
+  uploadErrors     String?  // JSON string of row-wise errors
   uploadDate       DateTime @default(now())
   remarks          String?
 
@@ -145,4 +149,169 @@ model EmailLog {
 
   supplier         Supplier?     @relation(fields: [supplierId], references: [id])
   scheduleLine     ScheduleLine? @relation(fields: [scheduleLineId], references: [id])
+}
+
+// ========== ASN System ==========
+
+model ASN {
+  id                  String   @id @default(uuid())
+  asnNo               String   @unique
+  supplierId          String
+  supplierCode        String
+  supplierName        String
+  buyerName           String?
+  unit                String?
+  status              String   @default("DRAFT") // DRAFT, SUBMITTED, GATE_ENTRY_PENDING, GATE_IN, ERP_TRIGGERED, ERP_SUCCESS, SENT_TO_STORE, COMPLETED, REJECTED, CANCELLED, DELAYED_ARRIVAL
+  asnDate             DateTime @default(now())
+  expectedArrivalDate DateTime?
+  expectedArrivalTime String?  // HH:mm format
+  totalAsnQty         Float    @default(0)
+  qrToken             String?  @unique
+  qrCodePath          String?
+  remarks             String?
+  createdBy           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  supplier            Supplier      @relation(fields: [supplierId], references: [id])
+  asnLines            ASNLine[]
+  cndn                CNDN?
+  documents           ASNDocument[]
+  gateEntry           GateEntry?
+  erpLogs             ERPIntegrationLog[]
+}
+
+model ASNLine {
+  id               String   @id @default(uuid())
+  asnId            String
+  scheduleLineId   String
+  poNo             String
+  poDate           DateTime?
+  itemCode         String
+  itemName         String
+  scheduleQty      Float
+  asnQty           Float
+  balanceQty       Float    @default(0)
+  invoiceNo        String?
+  invoiceDate      DateTime?
+  ewayBillNo       String?
+  shipmentType     String   @default("FULL") // FULL or PARTIAL
+  remarks          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  asn              ASN          @relation(fields: [asnId], references: [id], onDelete: Cascade)
+  scheduleLine     ScheduleLine @relation(fields: [scheduleLineId], references: [id])
+}
+
+model CNDN {
+  id               String   @id @default(uuid())
+  asnId            String   @unique
+  dnNo             String?
+  dnDate           DateTime?
+  cnNo             String?
+  cnDate           DateTime?
+  lrNo             String?
+  lrDate           DateTime?
+  transporterName  String?
+  vehicleNo        String?
+  vehicleType      String?
+  driverName       String?
+  driverMobile     String?
+  noOfBoxes        Int?
+  grossWeight      Float?
+  netWeight        Float?
+  packingDetails   String?
+  freightMode      String?
+  dispatchLocation String?
+  deliveryLocation String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  asn              ASN @relation(fields: [asnId], references: [id], onDelete: Cascade)
+}
+
+model ASNDocument {
+  id               String   @id @default(uuid())
+  asnId            String
+  documentType     String   // INVOICE, LR_COPY, PACKING_LIST, EWAY_BILL, DN_COPY, CN_COPY
+  originalFileName String
+  storedFileName   String
+  filePath         String
+  mimeType         String
+  fileSize         Int
+  uploadedAt       DateTime @default(now())
+
+  asn              ASN @relation(fields: [asnId], references: [id], onDelete: Cascade)
+}
+
+// ========== Gate Entry System ==========
+
+model GateEntry {
+  id                  String   @id @default(uuid())
+  gateEntryNo         String   @unique
+  asnId               String   @unique
+  actualGateInDateTime DateTime?
+  securityUserId      String?
+  gateStatus          String   @default("PENDING") // PENDING, GATE_IN, HOLD, RELEASED, COMPLETED
+  holdReason          String?
+  gateRemarks         String?
+  erpGateEntryNo      String?
+  erpSyncStatus       String   @default("PENDING") // PENDING, SUCCESS, FAILED
+  erpResponseMessage  String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  asn                 ASN   @relation(fields: [asnId], references: [id])
+  securityUser        User? @relation(fields: [securityUserId], references: [id])
+  erpLogs             ERPIntegrationLog[]
+}
+
+// ========== ERP Integration ==========
+
+model ERPIntegrationConfig {
+  id                 String   @id @default(uuid())
+  erpName            String
+  baseUrl            String
+  gateEntryEndpoint  String
+  authType           String   @default("API_KEY") // API_KEY, BASIC, OAUTH2, BEARER
+  apiKey             String?
+  username           String?
+  password           String?
+  tokenUrl           String?
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ERPIntegrationLog {
+  id               String   @id @default(uuid())
+  asnId            String?
+  gateEntryId      String?
+  requestPayload   String?  // JSON string
+  responsePayload  String?  // JSON string
+  status           String   @default("PENDING") // PENDING, SUCCESS, FAILED
+  errorCode        String?
+  errorMessage     String?
+  retryCount       Int      @default(0)
+  idempotencyKey   String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  asn              ASN?       @relation(fields: [asnId], references: [id])
+  gateEntry        GateEntry? @relation(fields: [gateEntryId], references: [id])
+}
+
+// ========== Audit Log ==========
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String   // CREATE, UPDATE, DELETE, LOGIN, UPLOAD, etc.
+  module      String   // ASN, GATE_ENTRY, ERP, SCHEDULE, USER, etc.
+  recordId    String?
+  oldValue    String?  // JSON string
+  newValue    String?  // JSON string
+  ipAddress   String?
+  createdAt   DateTime @default(now())
 }

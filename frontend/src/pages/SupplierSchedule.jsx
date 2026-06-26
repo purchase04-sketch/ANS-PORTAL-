@@ -3,140 +3,108 @@ import { scheduleAPI, shipmentAPI } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../hooks/useToast';
 import { statusColors, statusLabels, formatDate, formatNumber } from '../utils/helpers';
-import { Package, Plus, Upload, X } from 'lucide-react';
+import { Package, Send, X } from 'lucide-react';
 
 export default function SupplierSchedule() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedLine, setSelectedLine] = useState(null);
-  const [form, setForm] = useState({});
-  const [submitting, setSubmitting] = useState(false);
+  const [selectedLines, setSelectedLines] = useState([]);
   const { showToast, ToastContainer } = useToast();
 
   useEffect(() => { loadSchedules(); }, []);
 
   const loadSchedules = async () => {
     try {
-      const res = await scheduleAPI.getAll();
+      const res = await scheduleAPI.getSupplierSchedules();
       setSchedules(res.data);
+      setSelectedLines([]);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
 
-  const openShipmentModal = (line) => {
-    setSelectedLine(line);
-    setForm({
-      scheduleLineId: line.id,
-      dispatchQty: '',
-      dispatchDate: new Date().toISOString().split('T')[0],
-      expectedDeliveryDate: '',
-      invoiceNo: '', invoiceDate: '',
-      lrNo: '', lrDate: '',
-      transporterName: '', vehicleNo: '',
-      numberOfBoxes: '', packingDetails: '', shipmentRemarks: ''
-    });
-    setShowModal(true);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.dispatchQty || Number(form.dispatchQty) <= 0) return showToast('Enter valid dispatch qty', 'error');
-    if (Number(form.dispatchQty) > selectedLine.balanceQty) return showToast('Qty exceeds balance', 'error');
-    setSubmitting(true);
-    try {
-      await shipmentAPI.create(form);
-      showToast('Shipment created successfully', 'success');
-      setShowModal(false);
-      loadSchedules();
-    } catch (err) {
-      showToast(err.response?.data?.message || 'Error creating shipment', 'error');
-    } finally { setSubmitting(false); }
-  };
-
-  const handleDocUpload = async (shipmentId, file, docType) => {
-    const formData = new FormData();
-    formData.append('document', file);
-    formData.append('documentType', docType);
-    try {
-      await shipmentAPI.uploadDocument(shipmentId, formData);
-      showToast(`${docType} uploaded`, 'success');
-    } catch (err) {
-      showToast('Upload failed', 'error');
+  const handleSelectLine = (scheduleLine) => {
+    const isSelected = selectedLines.some(l => l.id === scheduleLine.id);
+    if (isSelected) {
+      setSelectedLines(selectedLines.filter(l => l.id !== scheduleLine.id));
+    } else {
+      setSelectedLines([...selectedLines, scheduleLine]);
     }
   };
 
-  if (loading) return <div className="flex justify-center items-center h-96"><div className="spinner"></div></div>;
+  const handleCreateASN = () => {
+    if (selectedLines.length === 0) return showToast('Please select at least one PO line', 'error');
+    navigate('/supplier/asn/create', { state: { selectedLines, supplierCode: user?.supplierCode || schedules[0]?.supplierCode } });
+  };
+
+  if (loading) return <div className="flex justify-center items-center h-64"><div className="spinner"></div></div>;
 
   return (
     <div className="space-y-5">
       <ToastContainer />
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">My PO Schedule</h1>
-        <p className="text-sm text-slate-500 mt-1">View your assigned purchase orders and update shipment details</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">My PO Schedule</h1>
+          <p className="text-sm text-slate-500 mt-1">Select lines and create ASN for dispatch</p>
+        </div>
+        {selectedLines.length > 0 && (
+          <button onClick={handleCreateASN} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700 font-medium shadow-sm shadow-blue-500/25">
+            <Send size={18} /> Create ASN ({selectedLines.length})
+          </button>
+        )}
       </div>
 
-      <div className="space-y-3">
-        {schedules.map(line => (
-          <div key={line.id} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-shadow">
-            <div className="flex items-start justify-between flex-wrap gap-4">
-              <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <p className="text-xs text-slate-500">PO No.</p>
-                  <p className="font-semibold text-slate-700">{line.poNo}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Item</p>
-                  <p className="font-medium text-slate-700">{line.itemCode} — {line.itemName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Schedule / Dispatched / Balance</p>
-                  <p className="font-semibold">
-                    <span className="text-slate-700">{formatNumber(line.scheduleQty)}</span>
-                    <span className="text-blue-600 mx-1">/ {formatNumber(line.totalDispatchQty)}</span>
-                    <span className="text-amber-600">/ {formatNumber(line.balanceQty)}</span>
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Required Date</p>
-                  <p className="font-medium text-slate-700">{formatDate(line.requiredDate)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${statusColors[line.status]}`}>
-                  {statusLabels[line.status]}
-                </span>
-                {line.balanceQty > 0 && (
-                  <button onClick={() => openShipmentModal(line)}
-                    className="px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-lg text-sm font-medium hover:shadow-lg transition-all flex items-center gap-1.5">
-                    <Plus size={14} /> Add Dispatch
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Existing shipments */}
-            {line.shipments?.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <p className="text-xs font-semibold text-slate-500 mb-2">Dispatch History ({line.shipments.length})</p>
-                <div className="space-y-2">
-                  {line.shipments.map((s, i) => (
-                    <div key={i} className="bg-slate-50 rounded-lg p-3 text-xs grid grid-cols-2 md:grid-cols-5 gap-3">
-                      <div><span className="text-slate-500">Qty:</span> <b>{formatNumber(s.dispatchQty)}</b></div>
-                      <div><span className="text-slate-500">Date:</span> {formatDate(s.dispatchDate)}</div>
-                      <div><span className="text-slate-500">Invoice:</span> {s.invoiceNo || '-'}</div>
-                      <div><span className="text-slate-500">LR:</span> {s.lrNo || '-'}</div>
-                      <div><span className="text-slate-500">Vehicle:</span> {s.vehicleNo || '-'}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th className="p-4 w-10"></th>
+              <th className="text-left p-4 text-slate-600">PO Details</th>
+              <th className="text-left p-4 text-slate-600">Item</th>
+              <th className="text-left p-4 text-slate-600">Qty (Sch/Bal)</th>
+              <th className="text-left p-4 text-slate-600">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {schedules.map((schedule) => {
+              const isSelected = selectedLines.some(l => l.id === schedule.id);
+              return (
+                <tr key={schedule.id} className={`hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50/50' : ''}`}>
+                  <td className="p-4">
+                    <input 
+                      type="checkbox" 
+                      checked={isSelected}
+                      onChange={() => handleSelectLine(schedule)}
+                      disabled={schedule.balanceQty <= 0}
+                      className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 disabled:opacity-50"
+                    />
+                  </td>
+                  <td className="p-4">
+                    <div className="font-medium text-slate-900">{schedule.poNo}</div>
+                    <div className="text-xs text-slate-500">{formatDate(schedule.requiredDate)}</div>
+                  </td>
+                  <td className="p-4">
+                    <div className="font-medium text-slate-700">{schedule.itemCode}</div>
+                    <div className="text-xs text-slate-500">{schedule.itemName}</div>
+                  </td>
+                  <td className="p-4">
+                    <span className="font-semibold">{formatNumber(schedule.scheduleQty)}</span>
+                    <span className="mx-1 text-slate-300">/</span>
+                    <span className="font-semibold text-amber-600">{formatNumber(schedule.balanceQty)}</span>
+                  </td>
+                  <td className="p-4">
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-semibold border ${statusColors[schedule.status]}`}>
+                      {statusLabels[schedule.status]}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
         {schedules.length === 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400">
+          <div className="p-12 text-center text-slate-400">
             <Package size={48} className="mx-auto mb-4 text-slate-300" />
             <p className="text-lg font-medium">No schedules assigned</p>
           </div>

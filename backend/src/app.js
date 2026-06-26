@@ -9,6 +9,9 @@ const shipmentRoutes = require('./routes/shipmentRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const emailRoutes = require('./routes/emailRoutes');
+const asnRoutes = require('./routes/asnRoutes');
+const gateRoutes = require('./routes/gateRoutes');
+const erpRoutes = require('./routes/erpRoutes');
 
 const app = express();
 
@@ -27,6 +30,9 @@ app.use('/api/shipments', shipmentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/asn', asnRoutes);
+app.use('/api/gate', gateRoutes);
+app.use('/api/erp', erpRoutes);
 
 app.use((err, req, res, next) => {
     console.error(err.stack);
